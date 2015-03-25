@@ -1,6 +1,7 @@
 ## cooker-daemon
 
-A daemon to keep temperature in slow cooker
+A daemon to keep temperature in slow cooker for Raspberry Pi.  
+This script checks temperature from MAX31855 and controls relay-connected slow cooker.
 
 ### Dependency
 
