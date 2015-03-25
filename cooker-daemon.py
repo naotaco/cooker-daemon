@@ -51,8 +51,7 @@ print ("log file: " + log_file_name)
 
 thermocouple = MAX31855(cs_pin, clock_pin, data_pin, units, GPIO.BOARD)
 
-# setpoint = 64.0 # default, and best temperature for chicken breast
-setpoint = 80
+setpoint = 64.0 # default, and best temperature for chicken breast
 
 running = True
 while(running):

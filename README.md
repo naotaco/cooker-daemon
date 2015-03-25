@@ -9,6 +9,8 @@ This script checks temperature from MAX31855 and controls relay-connected slow c
 
 ### Usage
 
+Don't forget to make it executable.
+
 #### Run directly
 
 ```
@@ -33,4 +35,9 @@ autorestart=true
 redirect_stderr=true
 ```
 
-Don't forget to make it executable.
+#### Set target temperature from outside
+
+```
+./set-target-temperature.py 70
+```
+
