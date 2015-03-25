@@ -1,2 +1,35 @@
-# cooker-daemon
+## cooker-daemon
+
 A daemon to keep temperature in slow cooker
+
+### Dependency
+
+[MAX31855 driver for Raspberry Pi](https://github.com/Tuckie/max31855) is required to run this code.
+
+### Usage
+
+#### Run directly
+
+```
+$ sudo ./cooker-daemon.py
+```
+
+Ctrl-C to stop.
+
+
+#### Run as daemon
+
+Using Supervisor is recommended.
+
+```
+# /etc/supervisor/conf.d/cooker.conf
+[program:cooker]
+command=/etc/cooker/script/cooker-daemon.py
+process_name=%(program_name)s_%(process_num)02d
+numprocs=1
+autostart=false
+autorestart=true
+redirect_stderr=true
+```
+
+Don't forget to make it executable.
