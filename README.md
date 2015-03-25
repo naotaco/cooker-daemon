@@ -5,7 +5,8 @@ This script checks temperature from MAX31855 and controls relay-connected slow c
 
 ### Dependency
 
-[MAX31855 driver for Raspberry Pi](https://github.com/Tuckie/max31855) is required to run this code.
+- Redis server and python3-redis
+- [MAX31855 driver for Raspberry Pi](https://github.com/Tuckie/max31855) is required to run this code.
 
 ### Usage
 
