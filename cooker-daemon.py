@@ -25,12 +25,15 @@ GPIO.setup(cooker_pin, GPIO.OUT)
 
 def turn_on():
     GPIO.output(cooker_pin, True)
+    redis_db.set('cooker_is_heating', 'true')
 
 def turn_off():
     GPIO.output(cooker_pin, False)
+    redis_db.set('cooker_is_heating', 'false')
 
 def _on_exit():
     print ("at exit")
+    redis_db.set('cooker_current_temperature', '-1')
     turn_off()
     time.sleep(1)
     GPIO.cleanup()
@@ -72,12 +75,14 @@ while(running):
         try:
             tc = thermocouple.get()
             # print ("tc: {}".format(tc))
+            
+            # save current temperature
+            redis_db.set('cooker_current_temperature', str(tc))
+
             if (tc < setpoint):
-                # print ("turing on")
                 turn_on()
                 output = 1
             else:
-                # print ("turning off")
                 turn_off()
                 output = 0
         
@@ -87,7 +92,7 @@ while(running):
 
         log_text = datetime.now().isoformat(), str(tc), str(setpoint), str(output)
         print ('\t'.join(log_text))
-        logfile.write('\t'.join(log_text).replace("T", "\t") + "\n")
+#        logfile.write('\t'.join(log_text).replace("T", "\t") + "\n")
 
     except KeyboardInterrupt:
         running = False
