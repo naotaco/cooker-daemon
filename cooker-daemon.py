@@ -4,7 +4,8 @@ import time
 from datetime import datetime
 
 import sys
-sys.path.append('/etc/cooker/max31855')
+import os
+sys.path.append(os.environ['MAX31855_PATH'])
 from max31855 import MAX31855, MAX31855Error
 
 import atexit
