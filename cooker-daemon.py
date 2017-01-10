@@ -2,27 +2,32 @@
 
 import time
 from datetime import datetime
+import urllib.request
+import json
 
 import sys
 import os
-sys.path.append(os.environ['MAX31855_PATH'])
-from max31855 import MAX31855, MAX31855Error
-
 import atexit
+import redis
+
 import RPi.GPIO as GPIO
 
-import redis
+import CookerFeedbackController
+from w1thermsensor import W1ThermSensor
+
+
 redis_db = redis.Redis(host='127.0.0.1', port=6379, db=0)
 
 # setup pin numbers
 cooker_pin = 35 # pin number connected to relay for the cooker
-cs_pin = 24 # MAX31855's chip select
-clock_pin = 23
-data_pin = 21
-units = "c" # Fahrenheight? what's that?
+
+influx_host = 'http://192.168.xxx.xxx:8086/write?db=home' # InfluxDB
 
 GPIO.setmode(GPIO.BOARD) # it seems default mode doesn't work on RPi2
+
 GPIO.setup(cooker_pin, GPIO.OUT)
+
+print("init controller.")
 
 def turn_on():
     GPIO.output(cooker_pin, True)
@@ -32,10 +37,94 @@ def turn_off():
     GPIO.output(cooker_pin, False)
     redis_db.set('cooker_is_heating', 'false')
 
+def save_temperature(temp, name):
+    try:
+        url = influx_host
+        data = ("cooker_%s value=%3.3f" % (name, temp)).encode('ascii')
+
+        cont_len = len(data)
+        req = urllib.request.Request(url, data, {'Content-Type': 'application/json', 'Content-Length': cont_len})
+        f = urllib.request.urlopen(req)
+        response = f.read()
+        f.close()
+    except Exception as e:
+        print ("Failed to push temperature")
+        print (e)
+
+def save_setpoint(temp):
+    try:
+        url = influx_host
+        data = "cooker_setpoint value={}".format(temp).encode('ascii')
+
+        cont_len = len(data)
+        req = urllib.request.Request(url, data, {'Content-Type': 'application/json', 'Content-Length': cont_len})
+        f = urllib.request.urlopen(req)
+        response = f.read()
+        f.close()
+    except Exception as e:
+        print ("Failed to push temperature")
+        print (e)
+
+def save_data(data):
+    url = influx_host
+    cont_len = len(data)
+    req = urllib.request.Request(url, data, {'Content-Type': 'application/json', 'Content-Length': cont_len})
+    f = urllib.request.urlopen(req)
+    response = f.read()
+    f.close()
+
+def save_pid_params(p, i, d):
+    try:
+        dp = "cooker_pid_p value={}".format(p).encode('ascii')
+        save_data(dp)
+        di = "cooker_pid_i value={}".format(i).encode('ascii')
+        save_data(di)
+        dd = "cooker_pid_d value={}".format(d).encode('ascii')
+        save_data(dd)
+
+    except Exception as e:
+        print ("Failed to push temperature")
+        print (e)
+
+def saveCookerPower(p):
+    try:
+        url = influx_host
+        data = "cooker_power value={}".format(p).encode('ascii')
+
+        cont_len = len(data)
+        req = urllib.request.Request(url, data, {'Content-Type': 'application/json', 'Content-Length': cont_len})
+        f = urllib.request.urlopen(req)
+        response = f.read()
+        f.close()
+    except Exception as e:
+        print ("Failed to push status")
+        print (e)
+        
+setpoint = 64.0 # default, and best temperature for chicken breast
+
+pwm_cycle = 3 # in sec.
+new_controller = GPIO.PWM(cooker_pin, 0.3) # 0.3Hz
+new_controller.start(0)
+
+# tuned parameters
+kp = 2.0
+ki = 5.0
+kd = 140.0
+i_hist_size = 500
+d_hist_size = 20
+i_clamp = 0.4
+d_clamp = 3
+pid = CookerFeedbackController.CookerFeedbackController(setpoint, kp, ki, i_hist_size, i_clamp, kd, d_hist_size, d_clamp, save_pid_params)
+
+def setCookerPower(p):
+    new_controller.ChangeDutyCycle(p * 100)
+    saveCookerPower(p)
+
 def _on_exit():
     print ("at exit")
     redis_db.set('cooker_current_temperature', '-1')
     turn_off()
+    controller.stop()
     time.sleep(1)
     GPIO.cleanup()
     print ("exit handler triggered")
@@ -49,15 +138,10 @@ import signal
 signal.signal(signal.SIGTERM, on_exit)
 atexit.register(_on_exit)
 
-log_file_name = "/etc/cooker/log/log_" + datetime.now().isoformat() + ".txt"
-logfile = open(log_file_name, "w")
-print ("log file: " + log_file_name)
-
-thermocouple = MAX31855(cs_pin, clock_pin, data_pin, units, GPIO.BOARD)
-
-setpoint = 64.0 # default, and best temperature for chicken breast
-
 running = True
+
+sensor = W1ThermSensor()
+
 while(running):
     
     new_setpoint = 0.0
@@ -70,37 +154,49 @@ while(running):
         print ("setpoint updated from " + str(setpoint) + " to " + str(new_setpoint))
         setpoint = new_setpoint
 
+    pid.setTarget(setpoint)
+
     try:    
         tc = 0
         output = 0
         try:
-            tc = thermocouple.get()
-            # print ("tc: {}".format(tc))
-            
+            temp_ds18 = 0.0
+            for sensor in W1ThermSensor.get_available_sensors():
+                print("Sensor %s has temperature %.2f" % (sensor.id, sensor.get_temperature()))
+                if (sensor.id == "xxxxxxxxxxxx"): # sensor's ID
+                    temp_ds18 = sensor.get_temperature()
+                    break
+
+            if (temp_ds18 == 0.0):
+                print("Warning: temperature is 0.0f.")
+
+            sys.stdout.write(" done. ")
+            sys.stdout.flush
+
+            pid.setCurrentTemperature(temp_ds18)
+
             # save current temperature
-            redis_db.set('cooker_current_temperature', str(tc))
+            if temp_ds18 > 1.0:
+                redis_db.set('cooker_current_temperature', str(temp_ds18))
 
-            if (tc < setpoint):
-                turn_on()
-                output = 1
-            else:
-                turn_off()
-                output = 0
-        
-        except MAX31855Error as e:
-            # print ("Error: " + e.value)
-            output = -1
+            save_temperature(temp_ds18, "temp_ds18")
+            save_setpoint(setpoint);
 
-        log_text = datetime.now().isoformat(), str(tc), str(setpoint), str(output)
-        print ('\t'.join(log_text))
-#        logfile.write('\t'.join(log_text).replace("T", "\t") + "\n")
+            power = pid.calcCookerPower()
+            print("power: " + str(power))
+            setCookerPower(power)
+        except:
+            print ("Unexpected error." + sys.exc_info()[0])
 
     except KeyboardInterrupt:
         running = False
         turn_off()
+        controller.stop()
         time.sleep(1)
         
 
     time.sleep(1)
 
 thermocouple.cleanup()
+
+
