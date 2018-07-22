@@ -1,12 +1,14 @@
 ## cooker-daemon
 
-A daemon to keep temperature in slow cooker for Raspberry Pi.  
-This script checks temperature from MAX31855 and controls relay-connected slow cooker.
+A daemon to keep temperature of slow cooker runs on for Raspberry Pi.  
+This script checks temperature from DS18B20 and controls relay to on/off connected slow cooker.
 
 ### Dependency
 
 - Redis server and python3-redis
-- [MAX31855 driver for Raspberry Pi](https://github.com/Tuckie/max31855) is required to run this code.
+- [RPi.GPIO](https://pypi.org/project/RPi.GPIO/)
+- [W1ThermSensor](https://github.com/timofurrer/w1thermsensor)
+- urllib, json, etc.
 
 ### Usage
 
@@ -37,6 +39,8 @@ redirect_stderr=true
 ```
 
 #### Set target temperature from outside
+
+Use bundled script.
 
 ```
 ./set-target-temperature.py 70
