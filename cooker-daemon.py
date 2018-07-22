@@ -124,7 +124,6 @@ def _on_exit():
     print ("at exit")
     redis_db.set('cooker_current_temperature', '-1')
     turn_off()
-    controller.stop()
     time.sleep(1)
     GPIO.cleanup()
     print ("exit handler triggered")
@@ -132,6 +131,20 @@ def _on_exit():
 
 def on_exit(sig, func=None):
     _on_exit()
+
+def fetchTargetTemperature():
+    try:
+        new_setpoint = float(redis_db.get('cooker_target_temperature'))
+    except ValueError:
+        new_setpoint = 0.0
+    return new_setpoint
+
+def getTemperature():
+    for sensor in W1ThermSensor.get_available_sensors():
+        print("Sensor %s has temperature %.2f" % (sensor.id, sensor.get_temperature()))
+        if (sensor.id == "XXXXXXXXXXXX"): # sensor's ID
+            return sensor.get_temperature()
+    return 0.0
 
 # register function to run before shutdown
 import signal
@@ -144,11 +157,7 @@ sensor = W1ThermSensor()
 
 while(running):
     
-    new_setpoint = 0.0
-    try:
-        new_setpoint = float(redis_db.get('cooker_target_temperature'))
-    except ValueError:
-        new_setpoint = 0.0
+    new_setpoint = fetchTargetTemperature()
 
     if (new_setpoint > 0 and new_setpoint != setpoint):
         print ("setpoint updated from " + str(setpoint) + " to " + str(new_setpoint))
@@ -160,12 +169,7 @@ while(running):
         tc = 0
         output = 0
         try:
-            temp_ds18 = 0.0
-            for sensor in W1ThermSensor.get_available_sensors():
-                print("Sensor %s has temperature %.2f" % (sensor.id, sensor.get_temperature()))
-                if (sensor.id == "xxxxxxxxxxxx"): # sensor's ID
-                    temp_ds18 = sensor.get_temperature()
-                    break
+            temp_ds18 = getTemperature()
 
             if (temp_ds18 == 0.0):
                 print("Warning: temperature is 0.0f.")
@@ -191,7 +195,6 @@ while(running):
     except KeyboardInterrupt:
         running = False
         turn_off()
-        controller.stop()
         time.sleep(1)
         
 
